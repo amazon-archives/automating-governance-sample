@@ -1,0 +1,28 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Sample, test only template that creates a sample Security Group allowing all SSH traffic inbound from 0.0.0.0/0 .  This template is for testing purposes only.",
+  "Parameters": {
+    "VPCName": {
+      "Description": "ID of the existing VPC.",
+      "Type": "AWS::EC2::VPC::Id"
+    }
+  },
+  "Resources": {
+    "sg": {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "SSH Security Group",
+        "SecurityGroupIngress" : {
+          "CidrIp": "72.21.196.67/32",
+          "FromPort": 22,
+          "ToPort": 22,
+          "IpProtocol": "tcp"
+        },
+		"Tags": [
+			{"Key": "Name", "Value": "demo1"},
+			{"Key": "LOB", "Value": "Finance"}
+		],
+        "VpcId" : { "Ref" : "VPCName" }}
+      }
+  }
+  }
