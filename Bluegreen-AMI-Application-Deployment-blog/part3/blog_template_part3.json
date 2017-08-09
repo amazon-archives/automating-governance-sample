@@ -32,21 +32,21 @@
 		  "AllowedPattern":"[\\x20-\\x7E]*",
 		  "ConstraintDescription":"Can contain only ASCII characters."
 		},
-		"CodeBuildJavaProject": {
+		"CodeBuildProject": {
 		  "Description": "CodeBuildProject name",
 		  "Default": "devsecopspart1",
 		  "Type": "String"
 		},		
-		"ELBName": {
-		  "Description": "Auto scaling group name",
+		"ElasticLoadBalancer": {
+		  "Description": "ElasticLoadBalancer name",
 		  "Type": "String"
 		},		
-		"MyDeploymentGroup": {
-		  "Description": "MyDeploymentGroup name",
+		"CodeDeploymentGroup": {
+		  "Description": "CodeDeploymentGroup name",
 		  "Type": "String"
 		},
-		"MyApplication": {
-		  "Description": "MyApplication name",
+		"CodeDeployApplication": {
+		  "Description": "CodeDeployApplication name",
 		  "Type": "String"
 		}	
     },	
@@ -377,7 +377,7 @@
 					},
 					"Configuration": {
 					  "FunctionName": {"Ref":"AutomationExecuteDocument"},
-					  "UserParameters":  { "Fn::Join" : [ "", [ "{","\"ssm_document_name\"",":","\"",{"Ref":"SSMAutomationDocument"},"\"",",","\"iam_instanceprofile_name\"",":","\"",{"Ref":"InstanceRoleInstanceProfile"},"\"",",","\"elb_name\"",":","\"",{"Ref":"ELBName"},"\"",",","\"deployment_group_name\"",":","\"",{"Ref":"MyDeploymentGroup"},"\"",",","\"application_name\"",":","\"",{"Ref":"MyApplication"},"\"","}"]]}
+					  "UserParameters":  { "Fn::Join" : [ "", [ "{","\"ssm_document_name\"",":","\"",{"Ref":"SSMAutomationDocument"},"\"",",","\"iam_instanceprofile_name\"",":","\"",{"Ref":"InstanceRoleInstanceProfile"},"\"",",","\"elb_name\"",":","\"",{"Ref":"ElasticLoadBalancer"},"\"",",","\"deployment_group_name\"",":","\"",{"Ref":"CodeDeploymentGroup"},"\"",",","\"application_name\"",":","\"",{"Ref":"CodeDeployApplication"},"\"","}"]]}
 					},
 					"OutputArtifacts": [{"Name": "MyApp1"}],
 					"RunOrder": "2"
@@ -407,7 +407,7 @@
 					],
 					"Configuration":{
 					  "ProjectName":{
-						"Ref":"CodeBuildJavaProject"
+						"Ref":"CodeBuildProject"
 					  }
 					},
 					"RunOrder":"2"
@@ -435,10 +435,10 @@
 					],
 					"Configuration":{
 					  "ApplicationName":{
-						"Ref":"MyApplication"
+						"Ref":"CodeDeployApplication"
 					  },
 					  "DeploymentGroupName":{
-						"Ref":"MyDeploymentGroup"
+						"Ref":"CodeDeploymentGroup"
 					  }
 					},
 					"RunOrder":"3"
