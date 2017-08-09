@@ -3,6 +3,7 @@
 Here are the steps to set up this sample
 
 <b> <u> Part1: </u></b> CloudFormation template will create the initial Java based web application environment in a VPC. It also creates all the required components of Systems Manager Automation, CodeCommit, CodeBuild, and CodeDeploy to support the blue/green deployments of the infrastructure and application resulting from ongoing code releases. Here are the initial set of resources that would be created from this part1 CloudFromation stack:
+
 	1.	A Java based web application running on EC2 instances loaded with CodeDeploy agents in an auto scaling group behind an elastic load balancer
 	2.	Systems Manager Automation document that patches the supplied base AMI and create the golden AMI.
 	3.	CodeCommit Repository to securely store code and files for your application.
