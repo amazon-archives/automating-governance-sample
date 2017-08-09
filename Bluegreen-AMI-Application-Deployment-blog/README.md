@@ -15,7 +15,7 @@ Here are the steps to set up this sample
 		b.	A function to update the Systems Manager parameter with the golden AMI ID 
 		c.	A function to update the CodeBuild deployment group with necessary blue-green configurations (currently cloudformation does not have support for creating a deployment group with blue-green deployment configurations)
 
-<b> <u> Part2: </u></b> CloudFormation template will create the AWS CodePipeline and all the requirements components with the following steps:
+<b> <u> Part3: </u></b> CloudFormation template will create the AWS CodePipeline and all the requirements components with the following steps:
 
 	1.	Source: Pipeline gets triggered from any changes to the codecommit repository
 	2.	BuildGoldenAMI: This Lambda step executes the Systems Manager automation document to build the Golan AMI. Once the golden AMI is successfully created, a new launch configuration with the new AMI details will be updated into the Auto scaling group of the Application deployment group. 
