@@ -1,0 +1,474 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Create Pipeline for BlueGreen environment.",
+    "Mappings": {
+    },
+    "Outputs": {
+    },
+    "Parameters": {
+		"LambdaS3Bucket": {
+		  "Description": "The name of the S3 bucket that contains the source artifact, which must be in the same region as this stack",
+		  "Type": "String",
+		  "Default": "devsecopstest"
+		},
+		"LambdaS3Key": {
+		  "Default": "devsecops-part3.zip",
+		  "Description": "The file name of the source artifact of the Lambda code, such as myfolder/myartifact.zip",
+		  "Type": "String"
+		},
+		"SSMAutomationDocument": {
+		  "Description": "SSMAutomationDocument name",
+		  "Default": "devsecopspart1-SSMAutomationDocument-C1MP3C6W0T7A",
+		  "Type": "String"
+		},			
+		"CodeCommitRepo": {
+		  "Default": "devsecopspart1",
+		  "Description": "Code commit repo name",
+		  "Type": "String"
+		},
+		"RepositoryBranch":{
+		  "Description":"The name of the branch for the CodeCommit repo",
+		  "Type":"String",
+		  "Default":"master",
+		  "AllowedPattern":"[\\x20-\\x7E]*",
+		  "ConstraintDescription":"Can contain only ASCII characters."
+		},
+		"CodeBuildJavaProject": {
+		  "Description": "CodeBuildProject name",
+		  "Default": "devsecopspart1",
+		  "Type": "String"
+		},		
+		"ELBName": {
+		  "Default": "devsecopspart1-WebServerGroup-XGQ5RHB9EEUA",
+		  "Description": "Auto scaling group name",
+		  "Type": "String"
+		},		
+		"MyDeploymentGroup": {
+		  "Description": "MyDeploymentGroup name",
+		  "Default": "devsecopspart1-MyDeploymentGroup-ETPZCV1APKNS",
+		  "Type": "String"
+		},
+		"MyApplication": {
+		  "Description": "MyApplication name",
+		  "Default": "devsecopspart1-MyApplication-1H3DSD016HEBV",
+		  "Type": "String"
+		}	
+    },	
+    "Resources": {
+		"PipelineS3Bucket" : {
+			"Type" : "AWS::S3::Bucket",
+			"Properties" : {"BucketName": {"Fn::Join":["",["codepipeline-",{"Ref":"AWS::Region"},"-",{"Ref":"AWS::AccountId"}]]}}
+		},
+		"CodePipelineRole":{
+		  "Type":"AWS::IAM::Role",
+		  "Properties":{
+			"AssumeRolePolicyDocument":{
+			  "Statement":[
+				{
+				  "Effect":"Allow",
+				  "Principal":{
+					"Service":[
+					  "codepipeline.amazonaws.com"
+					]
+				  },
+				  "Action":[
+					"sts:AssumeRole"
+				  ]
+				}
+			  ]
+			},
+			"Path":"/",
+			"Policies":[
+			  {
+				"PolicyName":"codepipeline-service",
+				"PolicyDocument":{
+				  "Statement":[
+					{
+					  "Action":[
+						"codecommit:GetBranch",
+						"codecommit:GetCommit",
+						"codecommit:UploadArchive",
+						"codecommit:GetUploadArchiveStatus",
+						"codecommit:CancelUploadArchive",
+						"codebuild:*"
+					  ],
+					  "Resource":"*",
+					  "Effect":"Allow"
+					},
+					{
+					  "Action":[
+						"s3:GetObject",
+						"s3:GetObjectVersion",
+						"s3:GetBucketVersioning"
+					  ],
+					  "Resource":"*",
+					  "Effect":"Allow"
+					},
+					{
+					  "Action":[
+						"s3:PutObject"
+					  ],
+					  "Resource":[
+						"arn:aws:s3:::codepipeline*",
+						"arn:aws:s3:::elasticbeanstalk*"
+					  ],
+					  "Effect":"Allow"
+					},
+					{
+					  "Action":[
+						"codedeploy:CreateDeployment",
+						"codedeploy:GetApplicationRevision",
+						"codedeploy:GetDeployment",
+						"codedeploy:GetDeploymentConfig",
+						"codedeploy:RegisterApplicationRevision"
+					  ],
+					  "Resource":"*",
+					  "Effect":"Allow"
+					},
+					{
+					  "Action":[
+						"elasticbeanstalk:*",
+						"ec2:*",
+						"elasticloadbalancing:*",
+						"autoscaling:*",
+						"cloudwatch:*",
+						"s3:*",
+						"sns:*",
+						"cloudformation:*",
+						"rds:*",
+						"sqs:*",
+						"ecs:*",
+						"iam:PassRole"
+					  ],
+					  "Resource":"*",
+					  "Effect":"Allow"
+					},
+					{
+					  "Action":[
+						"lambda:InvokeFunction",
+						"lambda:ListFunctions"
+					  ],
+					  "Resource":"*",
+					  "Effect":"Allow"
+					}
+				  ],
+				  "Version":"2012-10-17"
+				}
+			  }
+			]
+		  }
+		},
+		"DevSecOpsLambdaRole":{
+		  "Type":"AWS::IAM::Role",
+		  "Properties":{
+			"AssumeRolePolicyDocument":{
+			  "Version":"2012-10-17",
+			  "Statement":[
+				{
+				  "Effect":"Allow",
+				  "Principal":{
+					"Service":[
+					  "lambda.amazonaws.com"
+					]
+				  },
+				  "Action":[
+					"sts:AssumeRole"
+				  ]
+				}
+			  ]
+			},
+			"Path":"/"
+		  }
+		},	
+		"LambdaExecutionPolicy":{
+		  "DependsOn":[
+			"DevSecOpsLambdaRole"
+		  ],
+		  "Type":"AWS::IAM::Policy",
+		  "Properties":{
+			"PolicyName":"LambdaRolePolicy2",
+			"Roles":[
+			  {
+				"Ref":"DevSecOpsLambdaRole"
+			  }
+			],
+			"PolicyDocument":{
+			  "Version":"2012-10-17",
+			  "Statement":[
+				{
+				  "Effect":"Allow",
+				  "Action":[
+					"logs:*"
+				  ],
+				  "Resource":[
+					"arn:aws:logs:*:*:*"
+				  ]
+				},
+				{
+				  "Effect":"Allow",
+				  "Action":[
+					"s3:*",
+					"ec2:*",
+					"ssm:*",
+					"autoscaling:*",
+					"elasticloadbalancing:*",
+					"cloudformation:*",
+					"iam:PassRole",
+					"codepipeline:*",
+					"lambda:*",
+					"codedeploy:*"
+				  ],
+				  "Resource":[
+					"*"
+				  ]
+				},
+				{
+				  "Effect":"Allow",
+				  "Action":[
+					"sns:*"
+				  ],
+				  "Resource":[
+					"*"
+				  ]
+				}				
+			  ]
+			}
+		  }
+		},	
+		"AutomationExecuteDocument":{
+		  "Type":"AWS::Lambda::Function",
+		  "DependsOn":[
+			"DevSecOpsLambdaRole",
+			"LambdaExecutionPolicy"
+		  ],
+		  "Properties":{
+			"Code":{
+			  "S3Bucket":{
+				"Ref":"LambdaS3Bucket"
+			  },
+			  "S3Key":{"Ref":"LambdaS3Key"}
+			},
+			"Role":{"Fn::GetAtt":["DevSecOpsLambdaRole","Arn"]},
+			"FunctionName":"AutomationExecuteDocument",
+			"Description":"Always return success",
+			"Timeout":300,			
+			"Handler":"AutomationExecuteDocument.lambda_handler",
+			"Runtime":"python2.7"
+		  }
+		},
+		"InstanceRole":{
+		  "Type":"AWS::IAM::Role",
+		  "Properties":{
+			"AssumeRolePolicyDocument":{
+			  "Statement":[
+				{
+				  "Effect":"Allow",
+				  "Principal":{
+					"Service":[
+					  "ec2.amazonaws.com"
+					]
+				  },
+				  "Action":[
+					"sts:AssumeRole"
+				  ]
+				}
+			  ]
+			},
+			"Path":"/"
+		  }
+		},
+		"InstanceRolePolicies":{
+		  "Type":"AWS::IAM::Policy",
+		  "Properties":{
+			"PolicyName":"InstanceRole",
+			"PolicyDocument":{
+			  "Statement":[
+				{
+				  "Effect":"Allow",
+				  "Action":[
+					"ec2:*",
+					"codedeploy:*",
+					"autoscaling:Describe*",
+					"cloudformation:Describe*",
+					"cloudformation:GetTemplate",
+					"s3:Get*",
+					"s3:List*"
+				  ],
+				  "Resource":"*"
+				}
+			  ]
+			},
+			"Roles":[
+			  {
+				"Ref":"InstanceRole"
+			  }
+			]
+		  }
+		},
+		"InstanceRoleInstanceProfile":{
+		  "Type":"AWS::IAM::InstanceProfile",
+		  "Properties":{
+			"Path":"/",
+			"Roles":[
+			  {
+				"Ref":"InstanceRole"
+			  }
+			]
+		  }
+		},		
+		"CodePipelineStack":{
+		  "Type":"AWS::CodePipeline::Pipeline",
+		  "DependsOn":["AutomationExecuteDocument","InstanceRoleInstanceProfile","PipelineS3Bucket"],
+		  "Properties":{
+			"RoleArn":{
+			  "Fn::Join":[
+				"",
+				[
+				  "arn:aws:iam::",
+				  {
+					"Ref":"AWS::AccountId"
+				  },
+				  ":role/",
+				  {
+					"Ref":"CodePipelineRole"
+				  }
+				]
+			  ]
+			},
+			"Stages":[			
+			  {
+				"Name":"Source",
+				"Actions":[
+				  {
+					"InputArtifacts":[
+
+					],
+					"Name":"Source",
+					"ActionTypeId":{
+					  "Category":"Source",
+					  "Owner":"AWS",
+					  "Version":"1",
+					  "Provider":"CodeCommit"
+					},
+					"OutputArtifacts":[
+					  {
+						"Name":"MyApp"
+					  }
+					],
+					"Configuration":{
+					  "BranchName":{
+						"Ref":"RepositoryBranch"
+					  },
+					  "RepositoryName":{
+						"Ref":"CodeCommitRepo"
+					  }
+					},
+					"RunOrder":"1"
+				  }
+				]
+			  },
+			  {
+				"Name": "BuildGoldenAMI",
+				"Actions": [
+				  {
+					"InputArtifacts": [{"Name": "MyApp"}],
+					"Name": "AutomationExecuteDocument",
+					"ActionTypeId": {
+					  "Category": "Invoke",
+					  "Owner": "AWS",
+					  "Provider": "Lambda",
+					  "Version": "1"
+					},
+					"Configuration": {
+					  "FunctionName": {"Ref":"AutomationExecuteDocument"},
+					  "UserParameters":  { "Fn::Join" : [ "", [ "{","\"ssm_document_name\"",":","\"",{"Ref":"SSMAutomationDocument"},"\"",",","\"iam_instanceprofile_name\"",":","\"",{"Ref":"InstanceRoleInstanceProfile"},"\"",",","\"elb_name\"",":","\"",{"Ref":"ELBName"},"\"",",","\"deployment_group_name\"",":","\"",{"Ref":"MyDeploymentGroup"},"\"",",","\"application_name\"",":","\"",{"Ref":"MyApplication"},"\"","}"]]}
+					},
+					"OutputArtifacts": [{"Name": "MyApp1"}],
+					"RunOrder": "2"
+				  }
+				]
+			  },			  
+			  {
+				"Name":"Build",
+				"Actions":[
+				  {
+					"InputArtifacts":[
+					  {
+						"Name":"MyApp"
+					  }
+					],
+					"Name":"Build",
+					"ActionTypeId":{
+					  "Category":"Build",
+					  "Owner":"AWS",
+					  "Version":"1",
+					  "Provider":"CodeBuild"
+					},
+					"OutputArtifacts":[
+					  {
+						"Name":"MyAppBuild"
+					  }
+					],
+					"Configuration":{
+					  "ProjectName":{
+						"Ref":"CodeBuildJavaProject"
+					  }
+					},
+					"RunOrder":"2"
+				  }
+				]
+			  },
+			  {
+				"Name":"Deploy",
+				"Actions":[
+				  {
+					"InputArtifacts":[
+					  {
+						"Name":"MyAppBuild"
+					  }
+					],
+					"Name":"DemoFleet",
+					"ActionTypeId":{
+					  "Category":"Deploy",
+					  "Owner":"AWS",
+					  "Version":"1",
+					  "Provider":"CodeDeploy"
+					},
+					"OutputArtifacts":[
+
+					],
+					"Configuration":{
+					  "ApplicationName":{
+						"Ref":"MyApplication"
+					  },
+					  "DeploymentGroupName":{
+						"Ref":"MyDeploymentGroup"
+					  }
+					},
+					"RunOrder":"3"
+				  }
+				]
+			  }
+			],
+			"ArtifactStore":{
+			  "Type":"S3",
+			  "Location":{
+				"Fn::Join":[
+				  "",
+				  [
+					"codepipeline-",
+					{
+					  "Ref":"AWS::Region"
+					},
+					"-",
+					{
+					  "Ref":"AWS::AccountId"
+					}
+				  ]
+				]
+			  }
+			}
+		  }
+		}		
+    }
+}

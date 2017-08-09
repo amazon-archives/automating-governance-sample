@@ -1,0 +1,1218 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "AWS CloudFormation Sample Template AutoScalingMultiAZWithNotifications: Create a multi-az, load balanced and Auto Scaled sample web site running on an Apache Web Serever. The application is configured to span all Availability Zones in the region and is Auto-Scaled based on the CPU utilization of the web servers. Notifications will be sent to the operator email address on scaling events. The instances are load balanced with a simple health check against the default web page. **WARNING** This template creates one or more Amazon EC2 instances and an Elastic Load Balancer. You will be billed for the AWS resources used if you create a stack from this template.",
+
+  "Parameters" : {
+    "InstanceType" : {
+      "Description" : "WebServer EC2 instance type",
+      "Type" : "String",
+      "Default" : "t2.small",
+      "AllowedValues" : [ "t1.micro", "t2.nano", "t2.micro", "t2.small", "t2.medium", "t2.large", "m1.small", "m1.medium", "m1.large", "m1.xlarge", "m2.xlarge", "m2.2xlarge", "m2.4xlarge", "m3.medium", "m3.large", "m3.xlarge", "m3.2xlarge", "m4.large", "m4.xlarge", "m4.2xlarge", "m4.4xlarge", "m4.10xlarge", "c1.medium", "c1.xlarge", "c3.large", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge", "c4.large", "c4.xlarge", "c4.2xlarge", "c4.4xlarge", "c4.8xlarge", "g2.2xlarge", "g2.8xlarge", "r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge", "i2.xlarge", "i2.2xlarge", "i2.4xlarge", "i2.8xlarge", "d2.xlarge", "d2.2xlarge", "d2.4xlarge", "d2.8xlarge", "hi1.4xlarge", "hs1.8xlarge", "cr1.8xlarge", "cc2.8xlarge", "cg1.4xlarge"]
+,
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+    },
+
+    "OperatorEMail": {
+      "Description": "EMail address to notify if there are any scaling operations",
+      "Type": "String",
+      "AllowedPattern": "([a-zA-Z0-9_\\-\\.]+)@((\\[[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.)|(([a-zA-Z0-9\\-]+\\.)+))([a-zA-Z]{2,4}|[0-9]{1,3})(\\]?)",
+      "ConstraintDescription": "must be a valid email address."
+    },
+
+    "SSHLocation" : {
+      "Description" : "The IP address range that can be used to SSH to the EC2 instances",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "0.0.0.0/0",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+	"LambdaS3Bucket": {
+	  "Description": "The name of the S3 bucket that contains the source artifact, which must be in the same region as this stack",
+	  "Type": "String",
+	  "Default": "devsecopstest"
+	},
+	"LambdaS3Key": {
+	  "Default": "devsecops-part1.zip",
+	  "Description": "The file name of the source artifact of the Lambda code, such as myfolder/myartifact.zip",
+	  "Type": "String"
+	},
+    "InstanceCount":{
+      "Description":"Number of Amazon EC2 instances (Must be a number between 1 and 3).",
+      "Type":"Number",
+      "Default":"2",
+      "ConstraintDescription":"Must be a number between 1 and 3.",
+      "MinValue":"1",
+      "MaxValue":"3"
+    }	
+  },
+
+  "Mappings" : {
+    "Region2Examples" : {
+      "us-east-1"      : { "Examples" : "https://s3.amazonaws.com/cloudformation-examples-us-east-1" },
+      "us-west-2"      : { "Examples" : "https://s3-us-west-2.amazonaws.com/cloudformation-examples-us-west-2" },
+      "us-west-1"      : { "Examples" : "https://s3-us-west-1.amazonaws.com/cloudformation-examples-us-west-1" },
+      "eu-west-1"      : { "Examples" : "https://s3-eu-west-1.amazonaws.com/cloudformation-examples-eu-west-1" },
+      "eu-west-2"      : { "Examples" : "https://s3-eu-west-2.amazonaws.com/cloudformation-examples-eu-west-2" },
+      "eu-central-1"   : { "Examples" : "https://s3-eu-central-1.amazonaws.com/cloudformation-examples-eu-central-1" },
+      "ap-southeast-1" : { "Examples" : "https://s3-ap-southeast-1.amazonaws.com/cloudformation-examples-ap-southeast-1" },
+      "ap-northeast-1" : { "Examples" : "https://s3-ap-northeast-1.amazonaws.com/cloudformation-examples-ap-northeast-1" },
+      "ap-northeast-2" : { "Examples" : "https://s3-ap-northeast-2.amazonaws.com/cloudformation-examples-ap-northeast-2" },
+      "ap-southeast-2" : { "Examples" : "https://s3-ap-southeast-2.amazonaws.com/cloudformation-examples-ap-southeast-2" },
+      "ap-south-1"     : { "Examples" : "https://s3-ap-south-1.amazonaws.com/cloudformation-examples-ap-south-1" },
+      "us-east-2"      : { "Examples" : "https://s3-us-east-2.amazonaws.com/cloudformation-examples-us-east-2" },
+      "ca-central-1"   : { "Examples" : "https://s3-ca-central-1.amazonaws.com/cloudformation-examples-ca-central-1" },
+      "sa-east-1"      : { "Examples" : "https://s3-sa-east-1.amazonaws.com/cloudformation-examples-sa-east-1" },
+      "cn-north-1"     : { "Examples" : "https://s3.cn-north-1.amazonaws.com.cn/cloudformation-examples-cn-north-1" }
+    }
+,
+    "AWSInstanceType2Arch" : {
+      "t1.micro"    : { "Arch" : "PV64"   },
+      "t2.nano"     : { "Arch" : "HVM64"  },
+      "t2.micro"    : { "Arch" : "HVM64"  },
+      "t2.small"    : { "Arch" : "HVM64"  },
+      "t2.medium"   : { "Arch" : "HVM64"  },
+      "t2.large"    : { "Arch" : "HVM64"  },
+      "m1.small"    : { "Arch" : "PV64"   },
+      "m1.medium"   : { "Arch" : "PV64"   },
+      "m1.large"    : { "Arch" : "PV64"   },
+      "m1.xlarge"   : { "Arch" : "PV64"   },
+      "m2.xlarge"   : { "Arch" : "PV64"   },
+      "m2.2xlarge"  : { "Arch" : "PV64"   },
+      "m2.4xlarge"  : { "Arch" : "PV64"   },
+      "m3.medium"   : { "Arch" : "HVM64"  },
+      "m3.large"    : { "Arch" : "HVM64"  },
+      "m3.xlarge"   : { "Arch" : "HVM64"  },
+      "m3.2xlarge"  : { "Arch" : "HVM64"  },
+      "m4.large"    : { "Arch" : "HVM64"  },
+      "m4.xlarge"   : { "Arch" : "HVM64"  },
+      "m4.2xlarge"  : { "Arch" : "HVM64"  },
+      "m4.4xlarge"  : { "Arch" : "HVM64"  },
+      "m4.10xlarge" : { "Arch" : "HVM64"  },
+      "c1.medium"   : { "Arch" : "PV64"   },
+      "c1.xlarge"   : { "Arch" : "PV64"   },
+      "c3.large"    : { "Arch" : "HVM64"  },
+      "c3.xlarge"   : { "Arch" : "HVM64"  },
+      "c3.2xlarge"  : { "Arch" : "HVM64"  },
+      "c3.4xlarge"  : { "Arch" : "HVM64"  },
+      "c3.8xlarge"  : { "Arch" : "HVM64"  },
+      "c4.large"    : { "Arch" : "HVM64"  },
+      "c4.xlarge"   : { "Arch" : "HVM64"  },
+      "c4.2xlarge"  : { "Arch" : "HVM64"  },
+      "c4.4xlarge"  : { "Arch" : "HVM64"  },
+      "c4.8xlarge"  : { "Arch" : "HVM64"  },
+      "g2.2xlarge"  : { "Arch" : "HVMG2"  },
+      "g2.8xlarge"  : { "Arch" : "HVMG2"  },
+      "r3.large"    : { "Arch" : "HVM64"  },
+      "r3.xlarge"   : { "Arch" : "HVM64"  },
+      "r3.2xlarge"  : { "Arch" : "HVM64"  },
+      "r3.4xlarge"  : { "Arch" : "HVM64"  },
+      "r3.8xlarge"  : { "Arch" : "HVM64"  },
+      "i2.xlarge"   : { "Arch" : "HVM64"  },
+      "i2.2xlarge"  : { "Arch" : "HVM64"  },
+      "i2.4xlarge"  : { "Arch" : "HVM64"  },
+      "i2.8xlarge"  : { "Arch" : "HVM64"  },
+      "d2.xlarge"   : { "Arch" : "HVM64"  },
+      "d2.2xlarge"  : { "Arch" : "HVM64"  },
+      "d2.4xlarge"  : { "Arch" : "HVM64"  },
+      "d2.8xlarge"  : { "Arch" : "HVM64"  },
+      "hi1.4xlarge" : { "Arch" : "HVM64"  },
+      "hs1.8xlarge" : { "Arch" : "HVM64"  },
+      "cr1.8xlarge" : { "Arch" : "HVM64"  },
+      "cc2.8xlarge" : { "Arch" : "HVM64"  }
+    },
+
+    "AWSInstanceType2NATArch" : {
+      "t1.micro"    : { "Arch" : "NATPV64"   },
+      "t2.nano"     : { "Arch" : "NATHVM64"  },
+      "t2.micro"    : { "Arch" : "NATHVM64"  },
+      "t2.small"    : { "Arch" : "NATHVM64"  },
+      "t2.medium"   : { "Arch" : "NATHVM64"  },
+      "t2.large"    : { "Arch" : "NATHVM64"  },
+      "m1.small"    : { "Arch" : "NATPV64"   },
+      "m1.medium"   : { "Arch" : "NATPV64"   },
+      "m1.large"    : { "Arch" : "NATPV64"   },
+      "m1.xlarge"   : { "Arch" : "NATPV64"   },
+      "m2.xlarge"   : { "Arch" : "NATPV64"   },
+      "m2.2xlarge"  : { "Arch" : "NATPV64"   },
+      "m2.4xlarge"  : { "Arch" : "NATPV64"   },
+      "m3.medium"   : { "Arch" : "NATHVM64"  },
+      "m3.large"    : { "Arch" : "NATHVM64"  },
+      "m3.xlarge"   : { "Arch" : "NATHVM64"  },
+      "m3.2xlarge"  : { "Arch" : "NATHVM64"  },
+      "m4.large"    : { "Arch" : "NATHVM64"  },
+      "m4.xlarge"   : { "Arch" : "NATHVM64"  },
+      "m4.2xlarge"  : { "Arch" : "NATHVM64"  },
+      "m4.4xlarge"  : { "Arch" : "NATHVM64"  },
+      "m4.10xlarge" : { "Arch" : "NATHVM64"  },
+      "c1.medium"   : { "Arch" : "NATPV64"   },
+      "c1.xlarge"   : { "Arch" : "NATPV64"   },
+      "c3.large"    : { "Arch" : "NATHVM64"  },
+      "c3.xlarge"   : { "Arch" : "NATHVM64"  },
+      "c3.2xlarge"  : { "Arch" : "NATHVM64"  },
+      "c3.4xlarge"  : { "Arch" : "NATHVM64"  },
+      "c3.8xlarge"  : { "Arch" : "NATHVM64"  },
+      "c4.large"    : { "Arch" : "NATHVM64"  },
+      "c4.xlarge"   : { "Arch" : "NATHVM64"  },
+      "c4.2xlarge"  : { "Arch" : "NATHVM64"  },
+      "c4.4xlarge"  : { "Arch" : "NATHVM64"  },
+      "c4.8xlarge"  : { "Arch" : "NATHVM64"  },
+      "g2.2xlarge"  : { "Arch" : "NATHVMG2"  },
+      "g2.8xlarge"  : { "Arch" : "NATHVMG2"  },
+      "r3.large"    : { "Arch" : "NATHVM64"  },
+      "r3.xlarge"   : { "Arch" : "NATHVM64"  },
+      "r3.2xlarge"  : { "Arch" : "NATHVM64"  },
+      "r3.4xlarge"  : { "Arch" : "NATHVM64"  },
+      "r3.8xlarge"  : { "Arch" : "NATHVM64"  },
+      "i2.xlarge"   : { "Arch" : "NATHVM64"  },
+      "i2.2xlarge"  : { "Arch" : "NATHVM64"  },
+      "i2.4xlarge"  : { "Arch" : "NATHVM64"  },
+      "i2.8xlarge"  : { "Arch" : "NATHVM64"  },
+      "d2.xlarge"   : { "Arch" : "NATHVM64"  },
+      "d2.2xlarge"  : { "Arch" : "NATHVM64"  },
+      "d2.4xlarge"  : { "Arch" : "NATHVM64"  },
+      "d2.8xlarge"  : { "Arch" : "NATHVM64"  },
+      "hi1.4xlarge" : { "Arch" : "NATHVM64"  },
+      "hs1.8xlarge" : { "Arch" : "NATHVM64"  },
+      "cr1.8xlarge" : { "Arch" : "NATHVM64"  },
+      "cc2.8xlarge" : { "Arch" : "NATHVM64"  }
+    }
+,
+    "AWSRegionArch2AMI" : {
+      "us-east-1"        : {"PV64" : "ami-2a69aa47", "HVM64" : "ami-6869aa05", "HVMG2" : "ami-a41a3fb3"},
+      "us-west-2"        : {"PV64" : "ami-7f77b31f", "HVM64" : "ami-7172b611", "HVMG2" : "ami-caf253aa"},
+      "us-west-1"        : {"PV64" : "ami-a2490dc2", "HVM64" : "ami-31490d51", "HVMG2" : "ami-00347e60"},
+      "eu-west-1"        : {"PV64" : "ami-4cdd453f", "HVM64" : "ami-f9dd458a", "HVMG2" : "ami-e2f7bd91"},
+      "eu-west-2"        : {"PV64" : "NOT_SUPPORTED", "HVM64" : "ami-886369ec", "HVMG2" : "NOT_SUPPORTED"},
+      "eu-central-1"     : {"PV64" : "ami-6527cf0a", "HVM64" : "ami-ea26ce85", "HVMG2" : "ami-d2ff04bd"},
+      "ap-northeast-1"   : {"PV64" : "ami-3e42b65f", "HVM64" : "ami-374db956", "HVMG2" : "ami-4c78d52d"},
+      "ap-northeast-2"   : {"PV64" : "NOT_SUPPORTED", "HVM64" : "ami-2b408b45", "HVMG2" : "NOT_SUPPORTED"},
+      "ap-southeast-1"   : {"PV64" : "ami-df9e4cbc", "HVM64" : "ami-a59b49c6", "HVMG2" : "ami-f3f95990"},
+      "ap-southeast-2"   : {"PV64" : "ami-63351d00", "HVM64" : "ami-dc361ebf", "HVMG2" : "ami-3a122e59"},
+      "ap-south-1"       : {"PV64" : "NOT_SUPPORTED", "HVM64" : "ami-ffbdd790", "HVMG2" : "ami-21a7d34e"},
+      "us-east-2"        : {"PV64" : "NOT_SUPPORTED", "HVM64" : "ami-f6035893", "HVMG2" : "NOT_SUPPORTED"},
+      "ca-central-1"     : {"PV64" : "NOT_SUPPORTED", "HVM64" : "ami-730ebd17", "HVMG2" : "NOT_SUPPORTED"},
+      "sa-east-1"        : {"PV64" : "ami-1ad34676", "HVM64" : "ami-6dd04501", "HVMG2" : "NOT_SUPPORTED"},
+      "cn-north-1"       : {"PV64" : "ami-77559f1a", "HVM64" : "ami-8e6aa0e3", "HVMG2" : "NOT_SUPPORTED"}
+    }
+
+  },
+
+  "Resources" : {
+    "NotificationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "Subscription": [ { "Endpoint": { "Ref": "OperatorEMail" }, "Protocol": "email" } ]
+      }
+    },
+
+    "WebServerGroup" : {
+      "Type" : "AWS::AutoScaling::AutoScalingGroup",
+      "Properties" : {
+        "AvailabilityZones" : { "Fn::GetAZs" : ""},
+        "LaunchConfigurationName" : { "Ref" : "LaunchConfig" },
+        "MinSize" : {
+          "Ref":"InstanceCount"
+        },
+        "MaxSize" : {
+          "Ref":"InstanceCount"
+        },
+		"DesiredCapacity" : {
+          "Ref":"InstanceCount"
+        },
+        "LoadBalancerNames" : [ { "Ref" : "ElasticLoadBalancer" } ],
+        "NotificationConfiguration" : {
+          "TopicARN" : { "Ref" : "NotificationTopic" },
+          "NotificationTypes" : [ "autoscaling:EC2_INSTANCE_LAUNCH",
+                                  "autoscaling:EC2_INSTANCE_LAUNCH_ERROR",
+                                  "autoscaling:EC2_INSTANCE_TERMINATE",
+                                  "autoscaling:EC2_INSTANCE_TERMINATE_ERROR"]
+        }
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT15M",
+          "Count"   : "1"
+        }
+      },
+      "UpdatePolicy": {
+        "AutoScalingRollingUpdate": {
+          "MinInstancesInService": "1",
+          "MaxBatchSize": "1",
+          "PauseTime" : "PT15M",
+          "WaitOnResourceSignals": "true"
+        }
+      }
+    },
+    "LaunchConfig" : {
+      "Type" : "AWS::AutoScaling::LaunchConfiguration",
+	  "DependsOn":["InstanceRoleInstanceProfile"],
+      "Properties" : {
+		"IamInstanceProfile" : { "Ref" : "InstanceRoleInstanceProfile" },
+        "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                                          { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
+        "SecurityGroups" : [ { "Ref" : "InstanceSecurityGroup" } ],
+        "InstanceType" : { "Ref" : "InstanceType" },
+    "UserData": { "Fn::Base64": { "Fn::Join": [ "\n", [
+				{ "Fn::Join" : [ "", [ "#!/bin/bash", "" ] ] },
+                { "Fn::Join" : [ "", [ "", "" ] ] },
+                { "Fn::Join" : [ "", [ "function get_contents() {", "" ] ] },
+                { "Fn::Join" : [ "", [ "    if [ -x \"$(which curl)\" ]; then", "" ] ] },
+                { "Fn::Join" : [ "", [ "        curl -s -f \"$1\"", "" ] ] },
+                { "Fn::Join" : [ "", [ "    elif [ -x \"$(which wget)\" ]; then", "" ] ] },
+                { "Fn::Join" : [ "", [ "        wget \"$1\" -O -", "" ] ] },
+                { "Fn::Join" : [ "", [ "    else", "" ] ] },
+                { "Fn::Join" : [ "", [ "        die \"No download utility (curl, wget)\"", "" ] ] },
+                { "Fn::Join" : [ "", [ "    fi", "" ] ] },
+                { "Fn::Join" : [ "", [ "}", "" ] ] },
+                { "Fn::Join" : [ "", [ "", "" ] ] },
+                { "Fn::Join" : [ "", [ "readonly IDENTITY_URL=\"http://169.254.169.254/2016-06-30/dynamic/instance-identity/document/\"", "" ] ] },
+                { "Fn::Join" : [ "", [ "readonly TRUE_REGION=$(get_contents \"$IDENTITY_URL\" | awk -F\\\" '/region/ { print $4 }')", "" ] ] },
+                { "Fn::Join" : [ "", [ "readonly DEFAULT_REGION=\"us-east-1\"", "" ] ] },
+                { "Fn::Join" : [ "", [ "readonly REGION=\"${TRUE_REGION:-$DEFAULT_REGION}\"", "" ] ] },
+                { "Fn::Join" : [ "", [ "", "" ] ] },
+                { "Fn::Join" : [ "", [ "readonly SCRIPT_NAME=\"aws-install-ssm-agent\"", "" ] ] },
+                { "Fn::Join" : [ "", [ " SCRIPT_URL=\"https://aws-ssm-downloads-$REGION.s3.amazonaws.com/scripts/$SCRIPT_NAME\"", "" ] ] },
+                { "Fn::Join" : [ "", [ "", "" ] ] },
+                { "Fn::Join" : [ "", [ "if [ \"$REGION\" = \"cn-north-1\" ]; then", "" ] ] },
+                { "Fn::Join" : [ "", [ "  SCRIPT_URL=\"https://aws-ssm-downloads-$REGION.s3.cn-north-1.amazonaws.com.cn/scripts/$SCRIPT_NAME\"", "" ] ] },
+                { "Fn::Join" : [ "", [ "fi", "" ] ] },
+                { "Fn::Join" : [ "", [ "", "" ] ] },
+                { "Fn::Join" : [ "", [ "if [ \"$REGION\" = \"us-gov-west-1\" ]; then", "" ] ] },
+                { "Fn::Join" : [ "", [ "  SCRIPT_URL=\"https://aws-ssm-downloads-$REGION.s3-us-gov-west-1.amazonaws.com/scripts/$SCRIPT_NAME\"", "" ] ] },
+                { "Fn::Join" : [ "", [ "fi", "" ] ] },
+                { "Fn::Join" : [ "", [ "", "" ] ] },
+                { "Fn::Join" : [ "", [ "cd /tmp", "" ] ] },
+                { "Fn::Join" : [ "", [ "FILE_SIZE=0", "" ] ] },
+                { "Fn::Join" : [ "", [ "MAX_RETRY_COUNT=3", "" ] ] },
+                { "Fn::Join" : [ "", [ "RETRY_COUNT=0", "" ] ] },
+                { "Fn::Join" : [ "", [ "", "" ] ] },
+                { "Fn::Join" : [ "", [ "while [ $RETRY_COUNT -lt $MAX_RETRY_COUNT ] ; do", "" ] ] },
+                { "Fn::Join" : [ "", [ "  echo AWS-UpdateLinuxAmi: Downloading script from $SCRIPT_URL", "" ] ] },
+                { "Fn::Join" : [ "", [ "  get_contents \"$SCRIPT_URL\" > \"$SCRIPT_NAME\"", "" ] ] },
+                { "Fn::Join" : [ "", [ "  FILE_SIZE=$(du -k /tmp/$SCRIPT_NAME | cut -f1)", "" ] ] },
+                { "Fn::Join" : [ "", [ "  echo AWS-UpdateLinuxAmi: Finished downloading script, size: $FILE_SIZE", "" ] ] },
+                { "Fn::Join" : [ "", [ "  if [ $FILE_SIZE -gt 0 ]; then", "" ] ] },
+                { "Fn::Join" : [ "", [ "    break", "" ] ] },
+                { "Fn::Join" : [ "", [ "  else", "" ] ] },
+                { "Fn::Join" : [ "", [ "    if [[ $RETRY_COUNT -lt MAX_RETRY_COUNT ]]; then", "" ] ] },
+                { "Fn::Join" : [ "", [ "      RETRY_COUNT=$((RETRY_COUNT+1));", "" ] ] },
+                { "Fn::Join" : [ "", [ "      echo AWS-UpdateLinuxAmi: FileSize is 0, retryCount: $RETRY_COUNT", "" ] ] },
+                { "Fn::Join" : [ "", [ "    fi", "" ] ] },
+                { "Fn::Join" : [ "", [ "  fi", "" ] ] },
+                { "Fn::Join" : [ "", [ "done", "" ] ] },
+                { "Fn::Join" : [ "", [ "", "" ] ] },
+                { "Fn::Join" : [ "", [ "if [ $FILE_SIZE -gt 0 ]; then", "" ] ] },
+                { "Fn::Join" : [ "", [ "  chmod +x \"$SCRIPT_NAME\"", "" ] ] },
+                { "Fn::Join" : [ "", [ "  echo AWS-UpdateLinuxAmi: Running UpdateSSMAgent script now ....", "" ] ] },
+                { "Fn::Join" : [ "", [ "  ./\"$SCRIPT_NAME\" --region \"$REGION\"", "" ] ] },
+                { "Fn::Join" : [ "", [ "else", "" ] ] },
+                { "Fn::Join" : [ "", [ "  echo AWS-UpdateLinuxAmi: Unable to download script, quitting ....", "" ] ] },
+                { "Fn::Join" : [ "", [ "fi", "" ] ] },
+                { "Fn::Join" : [ "", [ "", "" ] ] },
+                { "Fn::Join" : [ "", [ "yum install -y aws-cli", "" ] ] },
+                { "Fn::Join" : [ "", [ "cd /home/ec2-user/", "" ] ] },
+                { "Fn::Join" : [ "", [ "aws s3 cp 's3://aws-codedeploy-us-east-1/latest/codedeploy-agent.noarch.rpm' . --region us-east-1", "" ] ] },
+                { "Fn::Join" : [ "", [ "yum -y install codedeploy-agent.noarch.rpm", "" ] ] },
+				{ "Fn::Join" : [ "", [ "yum -y install httpd", "" ] ] },
+				{ "Fn::Join" : [ "", [ "service httpd start", "" ] ] },
+				{ "Fn::Join" : [ "", [ "", "" ] ] },
+                { "Fn::Join" : [ "", [ "yum install -y aws-cfn-bootstrap", "" ] ] },
+                { "Fn::Join" : [ "", [ "# Install the files and packages from the metadata", "" ] ] },
+                { "Fn::Join" : [ "", [ "/opt/aws/bin/cfn-init -v  --stack ", { "Ref" : "AWS::StackId" }, "  --resource WebServerGroup  --region us-east-1", "" ] ] },
+                { "Fn::Join" : [ "", [ "# Start up the cfn-hup daemon to listen for changes to the Web Server metadata", "" ] ] },
+                { "Fn::Join" : [ "", [ "/opt/aws/bin/cfn-hup || error_exit 'Failed to start cfn-hup'", "" ] ] },
+                { "Fn::Join" : [ "", [ "# Signal the status from cfn-init", "" ] ] },
+                { "Fn::Join" : [ "", [ "/opt/aws/bin/cfn-signal -e $?  --stack ", { "Ref" : "AWS::StackId" } ,"  --resource WebServerGroup   --region us-east-1", "" ] ] }
+    ] ] } }
+      }
+    },
+
+    "WebServerScaleUpPolicy" : {
+      "Type" : "AWS::AutoScaling::ScalingPolicy",
+      "Properties" : {
+        "AdjustmentType" : "ChangeInCapacity",
+        "AutoScalingGroupName" : { "Ref" : "WebServerGroup" },
+        "Cooldown" : "60",
+        "ScalingAdjustment" : "1"
+      }
+    },
+    "WebServerScaleDownPolicy" : {
+      "Type" : "AWS::AutoScaling::ScalingPolicy",
+      "Properties" : {
+        "AdjustmentType" : "ChangeInCapacity",
+        "AutoScalingGroupName" : { "Ref" : "WebServerGroup" },
+        "Cooldown" : "60",
+        "ScalingAdjustment" : "-1"
+      }
+    },
+
+    "CPUAlarmHigh": {
+     "Type": "AWS::CloudWatch::Alarm",
+     "Properties": {
+        "AlarmDescription": "Scale-up if CPU > 90% for 10 minutes",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": "300",
+        "EvaluationPeriods": "2",
+        "Threshold": "90",
+        "AlarmActions": [ { "Ref": "WebServerScaleUpPolicy" } ],
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": { "Ref": "WebServerGroup" }
+          }
+        ],
+        "ComparisonOperator": "GreaterThanThreshold"
+      }
+    },
+    "CPUAlarmLow": {
+     "Type": "AWS::CloudWatch::Alarm",
+     "Properties": {
+        "AlarmDescription": "Scale-down if CPU < 70% for 10 minutes",
+        "MetricName": "CPUUtilization",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": "300",
+        "EvaluationPeriods": "2",
+        "Threshold": "70",
+        "AlarmActions": [ { "Ref": "WebServerScaleDownPolicy" } ],
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": { "Ref": "WebServerGroup" }
+          }
+        ],
+        "ComparisonOperator": "LessThanThreshold"
+      }
+    },
+
+    "ElasticLoadBalancer" : {
+      "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+      "Properties" : {
+        "AvailabilityZones" : { "Fn::GetAZs" : "" },
+        "CrossZone" : "true",
+        "Listeners" : [ {
+          "LoadBalancerPort" : "80",
+          "InstancePort" : "80",
+          "Protocol" : "HTTP"
+        } ],
+        "HealthCheck" : {
+          "Target" : "TCP:80",
+          "HealthyThreshold" : "3",
+          "UnhealthyThreshold" : "5",
+          "Interval" : "30",
+          "Timeout" : "5"
+        }
+      }
+    },
+
+    "InstanceSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable SSH access and HTTP from the load balancer only",
+        "SecurityGroupIngress" : [ {
+          "IpProtocol" : "tcp",
+          "FromPort" : "22",
+          "ToPort" : "22",
+          "CidrIp" : { "Ref" : "SSHLocation"}
+        },
+        {
+          "IpProtocol" : "tcp",
+          "FromPort" : "80",
+          "ToPort" : "80",
+		  "SourceSecurityGroupOwnerId" : {"Fn::GetAtt" : ["ElasticLoadBalancer", "SourceSecurityGroup.OwnerAlias"]},
+          "SourceSecurityGroupName" : {"Fn::GetAtt" : ["ElasticLoadBalancer", "SourceSecurityGroup.GroupName"]}
+        } ]
+      }
+    },
+      
+      "BasicParameter1": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "SourceAMIID",
+            "Type": "String",
+            "Value": "test",
+            "Description": "Source AMIID"
+         }
+      },
+      "BasicParameter2": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "GoldenAMIID",
+            "Type": "String",
+            "Value": "test",
+            "Description": "Golden AMIID"
+         }
+      },
+	  "BasicParameter3": {
+         "Type": "AWS::SSM::Parameter",
+         "Properties": {
+            "Name": "ASGName",
+            "Type": "String",
+            "Value": "test",
+            "Description": "Auto scaling group"
+         }
+      },
+		"ManagedInstanceRole": {
+		  "Type": "AWS::IAM::Role",
+		  "Properties": {
+			"AssumeRolePolicyDocument": {
+			  "Version": "2012-10-17",
+			  "Statement": [
+				{
+				  "Effect": "Allow",
+				  "Principal": {
+					"Service": [
+					  "ssm.amazonaws.com",
+					  "ec2.amazonaws.com"
+					]
+				  },
+				  "Action": "sts:AssumeRole"
+				}
+			  ]
+			},
+			"ManagedPolicyArns": [
+			  "arn:aws:iam::aws:policy/service-role/AmazonEC2RoleforSSM"
+			],
+			"Path": "/"
+		  }
+		},
+		"ManagedInstanceProfile": {
+		  "Type": "AWS::IAM::InstanceProfile",
+		  "Properties": {
+			"Path": "/",
+			"Roles": [
+			  {
+				"Ref": "ManagedInstanceRole"
+			  }
+			],
+			"InstanceProfileName": {"Fn::Sub": "${AWS::StackName}-ManagedInstanceProfile"}
+		  }
+		},
+		"InstanceRole":{
+		  "Type":"AWS::IAM::Role",
+		  "Properties":{
+			"AssumeRolePolicyDocument":{
+			  "Statement":[
+				{
+				  "Effect":"Allow",
+				  "Principal":{
+					"Service":[
+					  "ec2.amazonaws.com"
+					]
+				  },
+				  "Action":[
+					"sts:AssumeRole"
+				  ]
+				}
+			  ]
+			},
+			"Path":"/"
+		  }
+		},
+		"InstanceRolePolicies":{
+		  "Type":"AWS::IAM::Policy",
+		  "Properties":{
+			"PolicyName":"InstanceRole",
+			"PolicyDocument":{
+			  "Statement":[
+				{
+				  "Effect":"Allow",
+				  "Action":[
+					"ec2:*",
+					"codedeploy:*",
+					"autoscaling:Describe*",
+					"cloudformation:Describe*",
+					"cloudformation:GetTemplate",
+					"s3:Get*",
+					"s3:List*"
+				  ],
+				  "Resource":"*"
+				}
+			  ]
+			},
+			"Roles":[
+			  {
+				"Ref":"InstanceRole"
+			  }
+			]
+		  }
+		},
+		"InstanceRoleInstanceProfile":{
+		  "Type":"AWS::IAM::InstanceProfile",
+		  "Properties":{
+			"Path":"/",
+			"Roles":[
+			  {
+				"Ref":"InstanceRole"
+			  }
+			]
+		  }
+		},		
+		"AutomationServiceRole": {
+		  "Type": "AWS::IAM::Role",
+		  "Properties": {
+			"AssumeRolePolicyDocument": {
+			  "Version": "2012-10-17",
+			  "Statement": [
+				{
+				  "Effect": "Allow",
+				  "Principal": {
+					"Service": [
+					  "ssm.amazonaws.com",
+					  "ec2.amazonaws.com"
+					]
+				  },
+				  "Action": "sts:AssumeRole"
+				}
+			  ]
+			},
+			"ManagedPolicyArns": [
+			  "arn:aws:iam::aws:policy/service-role/AmazonSSMAutomationRole"
+			],
+			"Path": "/",
+			"RoleName":{"Fn::Sub": "${AWS::StackName}-AutomationServiceRole"},
+			"Policies": [
+			  {
+				"PolicyName": "passrole",
+				"PolicyDocument": {
+				  "Version": "2012-10-17",
+				  "Statement": [
+					{
+					  "Effect": "Allow",
+					  "Action": [
+						"iam:PassRole"
+					  ],
+					  "Resource": [
+						{"Fn::GetAtt":["ManagedInstanceRole","Arn"]}
+					  ]
+					}
+				  ]
+				}
+			  }
+			]
+		  }
+		},	
+		"SSMIAMPolicy1":{
+		  "DependsOn":[
+			"AutomationServiceRole"
+		  ],
+		  "Type":"AWS::IAM::Policy",
+		  "Properties":{
+			"PolicyName":"SSMIAMPolicy1",
+			"Roles":[
+			  {
+				"Ref":"AutomationServiceRole"
+			  }
+			],
+			"PolicyDocument":{
+			  "Version":"2012-10-17",
+			  "Statement":[
+				{
+				  "Effect":"Allow",
+				  "Action":[
+					"iam:*"
+				  ],
+				  "Resource":[
+					"*"
+				  ]
+				}				
+			  ]
+			}
+		  }
+		},
+		"SSMIAMPolicy2":{
+		  "DependsOn":[
+			"ManagedInstanceRole"
+		  ],
+		  "Type":"AWS::IAM::Policy",
+		  "Properties":{
+			"PolicyName":"SSMIAMPolicy2",
+			"Roles":[
+			  {
+				"Ref":"ManagedInstanceRole"
+			  }
+			],
+			"PolicyDocument":{
+			  "Version":"2012-10-17",
+			  "Statement":[
+				{
+				  "Effect":"Allow",
+				  "Action":[
+					"iam:*"
+				  ],
+				  "Resource":[
+					"*"
+				  ]
+				}				
+			  ]
+			}
+		  }
+		},
+        "SSMAutomationDocument": {
+            "Type": "AWS::SSM::Document",
+			"DependsOn": ["ManagedInstanceProfile","AutomationServiceRole","BasicParameter1","BasicParameter2"],
+            "Properties": {
+                "DocumentType": "Automation",
+                "Content": {
+					  "schemaVersion":"0.3",
+					  "description":"Updates AMI with Linux distribution packages and Amazon software. For details,see https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/sysman-ami-walkthrough.html",
+					  "assumeRole":"{{AutomationAssumeRole}}",
+					  "parameters":{
+						"SourceAmiId":{
+						  "type":"String",
+						  "description":"(Required) The source Amazon Machine Image ID.",
+						  "default": "{{ssm:SourceAMIID}}"
+						},
+						"InstanceIamRole":{
+						  "type":"String",
+						  "description":"(Required) The name of the role that enables Systems Manager (SSM) to manage the instance.",
+                            "default": {
+                                "Ref": "ManagedInstanceProfile"
+                            }						  
+						},
+						"AutomationAssumeRole":{
+						  "type":"String",
+						  "description":"(Required) The ARN of the role that allows Automation to perform the actions on your behalf.",
+						  "default": {"Fn::GetAtt": ["AutomationServiceRole","Arn"]}
+						},
+						"TargetAmiName":{
+						  "type":"String",
+						  "description":"(Optional) The name of the new AMI that will be created. Default is a system-generated string including the source AMI id, and the creation time and date.",
+						  "default":"UpdateLinuxAmi_from_{{ssm:SourceAMIID}}_on_{{global:DATE_TIME}}"
+						},
+						"InstanceType":{
+						  "type":"String",
+						  "description":"(Optional) Type of instance to launch as the workspace host. Instance types vary by region. Default is t2.micro.",
+						  "default":"t2.micro"
+						},
+						"PreUpdateScript":{
+						  "type":"String",
+						  "description":"(Optional) URL of a script to run before updates are applied. Default (\"none\") is to not run a script.",
+						  "default":"none"
+						},
+						"PostUpdateScript":{
+						  "type":"String",
+						  "description":"(Optional) URL of a script to run after package updates are applied. Default (\"none\") is to not run a script.",
+						  "default":"none"
+						},
+						"IncludePackages":{
+						  "type":"String",
+						  "description":"(Optional) Only update these named packages. By default (\"all\"), all available updates are applied.",
+						  "default":"all"
+						},
+						"ExcludePackages":{
+						  "type":"String",
+						  "description":"(Optional) Names of packages to hold back from updates, under all conditions. By default (\"none\"), no package is excluded.",
+						  "default":"none"
+						}
+					  },
+					  "mainSteps":[
+						{
+						 "name":"getSourceAMI",
+						 "action":"aws:invokeLambdaFunction",
+						 "timeoutSeconds":1200,
+						 "maxAttempts":1,
+						 "onFailure":"Abort",
+						 "inputs":{
+							"FunctionName":"AutomationGetSourceAMI",
+							"Payload":"{\"Region\":\"us-east-1\", \"Architecture\":\"HVM64\"}"
+						 }
+					  },
+						{
+						 "name":"updateSsmParam1",
+						 "action":"aws:invokeLambdaFunction",
+						 "timeoutSeconds":1200,
+						 "maxAttempts":1,
+						 "onFailure":"Abort",
+						 "inputs":{
+							"FunctionName":"AutomationUpdateSsmParam",
+							"Payload":"{\"parameterName\":\"SourceAMIID\", \"parameterValue\":\"{{getSourceAMI.Payload}}\"}"
+						 }
+					  },					  
+						{
+						  "name":"launchInstance",
+						  "action":"aws:runInstances",
+						  "maxAttempts":3,
+						  "timeoutSeconds":1200,
+						  "onFailure":"Abort",
+						  "inputs":{
+							"ImageId":"{{SourceAmiId}}",
+							"InstanceType":"{{InstanceType}}",
+							"UserData":"IyEvYmluL2Jhc2gNCg0KZnVuY3Rpb24gZ2V0X2NvbnRlbnRzKCkgew0KICAgIGlmIFsgLXggIiQod2hpY2ggY3VybCkiIF07IHRoZW4NCiAgICAgICAgY3VybCAtcyAtZiAiJDEiDQogICAgZWxpZiBbIC14ICIkKHdoaWNoIHdnZXQpIiBdOyB0aGVuDQogICAgICAgIHdnZXQgIiQxIiAtTyAtDQogICAgZWxzZQ0KICAgICAgICBkaWUgIk5vIGRvd25sb2FkIHV0aWxpdHkgKGN1cmwsIHdnZXQpIg0KICAgIGZpDQp9DQoNCnJlYWRvbmx5IElERU5USVRZX1VSTD0iaHR0cDovLzE2OS4yNTQuMTY5LjI1NC8yMDE2LTA2LTMwL2R5bmFtaWMvaW5zdGFuY2UtaWRlbnRpdHkvZG9jdW1lbnQvIg0KcmVhZG9ubHkgVFJVRV9SRUdJT049JChnZXRfY29udGVudHMgIiRJREVOVElUWV9VUkwiIHwgYXdrIC1GXCIgJy9yZWdpb24vIHsgcHJpbnQgJDQgfScpDQpyZWFkb25seSBERUZBVUxUX1JFR0lPTj0idXMtZWFzdC0xIg0KcmVhZG9ubHkgUkVHSU9OPSIke1RSVUVfUkVHSU9OOi0kREVGQVVMVF9SRUdJT059Ig0KDQpyZWFkb25seSBTQ1JJUFRfTkFNRT0iYXdzLWluc3RhbGwtc3NtLWFnZW50Ig0KIFNDUklQVF9VUkw9Imh0dHBzOi8vYXdzLXNzbS1kb3dubG9hZHMtJFJFR0lPTi5zMy5hbWF6b25hd3MuY29tL3NjcmlwdHMvJFNDUklQVF9OQU1FIg0KDQppZiBbICIkUkVHSU9OIiA9ICJjbi1ub3J0aC0xIiBdOyB0aGVuDQogIFNDUklQVF9VUkw9Imh0dHBzOi8vYXdzLXNzbS1kb3dubG9hZHMtJFJFR0lPTi5zMy5jbi1ub3J0aC0xLmFtYXpvbmF3cy5jb20uY24vc2NyaXB0cy8kU0NSSVBUX05BTUUiDQpmaQ0KDQppZiBbICIkUkVHSU9OIiA9ICJ1cy1nb3Ytd2VzdC0xIiBdOyB0aGVuDQogIFNDUklQVF9VUkw9Imh0dHBzOi8vYXdzLXNzbS1kb3dubG9hZHMtJFJFR0lPTi5zMy11cy1nb3Ytd2VzdC0xLmFtYXpvbmF3cy5jb20vc2NyaXB0cy8kU0NSSVBUX05BTUUiDQpmaQ0KDQpjZCAvdG1wDQpGSUxFX1NJWkU9MA0KTUFYX1JFVFJZX0NPVU5UPTMNClJFVFJZX0NPVU5UPTANCg0Kd2hpbGUgWyAkUkVUUllfQ09VTlQgLWx0ICRNQVhfUkVUUllfQ09VTlQgXSA7IGRvDQogIGVjaG8gQVdTLVVwZGF0ZUxpbnV4QW1pOiBEb3dubG9hZGluZyBzY3JpcHQgZnJvbSAkU0NSSVBUX1VSTA0KICBnZXRfY29udGVudHMgIiRTQ1JJUFRfVVJMIiA+ICIkU0NSSVBUX05BTUUiDQogIEZJTEVfU0laRT0kKGR1IC1rIC90bXAvJFNDUklQVF9OQU1FIHwgY3V0IC1mMSkNCiAgZWNobyBBV1MtVXBkYXRlTGludXhBbWk6IEZpbmlzaGVkIGRvd25sb2FkaW5nIHNjcmlwdCwgc2l6ZTogJEZJTEVfU0laRQ0KICBpZiBbICRGSUxFX1NJWkUgLWd0IDAgXTsgdGhlbg0KICAgIGJyZWFrDQogIGVsc2UNCiAgICBpZiBbWyAkUkVUUllfQ09VTlQgLWx0IE1BWF9SRVRSWV9DT1VOVCBdXTsgdGhlbg0KICAgICAgUkVUUllfQ09VTlQ9JCgoUkVUUllfQ09VTlQrMSkpOw0KICAgICAgZWNobyBBV1MtVXBkYXRlTGludXhBbWk6IEZpbGVTaXplIGlzIDAsIHJldHJ5Q291bnQ6ICRSRVRSWV9DT1VOVA0KICAgIGZpDQogIGZpIA0KZG9uZQ0KDQppZiBbICRGSUxFX1NJWkUgLWd0IDAgXTsgdGhlbg0KICBjaG1vZCAreCAiJFNDUklQVF9OQU1FIg0KICBlY2hvIEFXUy1VcGRhdGVMaW51eEFtaTogUnVubmluZyBVcGRhdGVTU01BZ2VudCBzY3JpcHQgbm93IC4uLi4NCiAgLi8iJFNDUklQVF9OQU1FIiAtLXJlZ2lvbiAiJFJFR0lPTiINCmVsc2UNCiAgZWNobyBBV1MtVXBkYXRlTGludXhBbWk6IFVuYWJsZSB0byBkb3dubG9hZCBzY3JpcHQsIHF1aXR0aW5nIC4uLi4NCmZpDQoNCnl1bSBpbnN0YWxsIC15IGF3cy1jbGkNCmNkIC9ob21lL2VjMi11c2VyLw0KYXdzIHMzIGNwICdzMzovL2F3cy1jb2RlZGVwbG95LXVzLWVhc3QtMS9sYXRlc3QvY29kZWRlcGxveS1hZ2VudC5ub2FyY2gucnBtJyAuIC0tcmVnaW9uIHVzLWVhc3QtMQ0KeXVtIC15IGluc3RhbGwgY29kZWRlcGxveS1hZ2VudC5ub2FyY2gucnBt",
+							"MinInstanceCount":1,
+							"MaxInstanceCount":1,
+							"IamInstanceProfileName":"{{InstanceIamRole}}"
+						  }
+						},
+						{
+						  "name":"updateOSSoftware",
+						  "action":"aws:runCommand",
+						  "maxAttempts":3,
+						  "timeoutSeconds":3600,
+						  "onFailure":"Abort",
+						  "inputs":{
+							"DocumentName":"AWS-RunShellScript",
+							"InstanceIds":[
+							  "{{launchInstance.InstanceIds}}"
+							],
+							"Parameters":{
+							  "commands":[
+								"set -e",
+								"[ -x \"$(which wget)\" ] && get_contents='wget $1 -O -'",
+								"[ -x \"$(which curl)\" ] && get_contents='curl -s -f $1'",
+								"eval $get_contents https://aws-ssm-downloads-{{global:REGION}}.s3.amazonaws.com/scripts/aws-update-linux-instance > /tmp/aws-update-linux-instance",
+								"chmod +x /tmp/aws-update-linux-instance",
+								"/tmp/aws-update-linux-instance --pre-update-script '{{PreUpdateScript}}' --post-update-script '{{PostUpdateScript}}' --include-packages '{{IncludePackages}}' --exclude-packages '{{ExcludePackages}}' 2>&1 | tee /tmp/aws-update-linux-instance.log"
+							  ]
+							}
+						  }
+						},
+						{
+						  "name":"stopInstance",
+						  "action":"aws:changeInstanceState",
+						  "maxAttempts":3,
+						  "timeoutSeconds":1200,
+						  "onFailure":"Abort",
+						  "inputs":{
+							"InstanceIds":[
+							  "{{launchInstance.InstanceIds}}"
+							],
+							"DesiredState":"stopped"
+						  }
+						},
+						{
+						  "name":"createImage",
+						  "action":"aws:createImage",
+						  "maxAttempts":3,
+						  "onFailure":"Abort",
+						  "inputs":{
+							"InstanceId":"{{launchInstance.InstanceIds}}",
+							"ImageName":"{{TargetAmiName}}",
+							"NoReboot":true,
+							"ImageDescription":"AMI Generated by EC2 Automation on {{global:DATE_TIME}} from {{SourceAmiId}}"
+						  }
+						},
+						{
+						  "name":"terminateInstance",
+						  "action":"aws:changeInstanceState",
+						  "maxAttempts":3,
+						  "onFailure":"Continue",
+						  "inputs":{
+							"InstanceIds":[
+							  "{{launchInstance.InstanceIds}}"
+							],
+							"DesiredState":"terminated"
+						  }
+						},
+						{
+						 "name":"updateSsmParam2",
+						 "action":"aws:invokeLambdaFunction",
+						 "timeoutSeconds":1200,
+						 "maxAttempts":1,
+						 "onFailure":"Abort",
+						 "inputs":{
+							"FunctionName":"AutomationUpdateSsmParam",
+							"Payload":"{\"parameterName\":\"GoldenAMIID\", \"parameterValue\":\"{{createImage.ImageId}}\"}"
+						 }
+					  }						
+					  ],
+					  "outputs":[
+						"createImage.ImageId"
+					  ]
+                }
+            }
+        },
+		"DevSecOpsLambdaRole":{
+		  "Type":"AWS::IAM::Role",
+		  "Properties":{
+			"AssumeRolePolicyDocument":{
+			  "Version":"2012-10-17",
+			  "Statement":[
+				{
+				  "Effect":"Allow",
+				  "Principal":{
+					"Service":[
+					  "lambda.amazonaws.com"
+					]
+				  },
+				  "Action":[
+					"sts:AssumeRole"
+				  ]
+				}
+			  ]
+			},
+			"Path":"/"
+		  }
+		},	
+		"LambdaExecutionPolicy":{
+		  "DependsOn":[
+			"DevSecOpsLambdaRole"
+		  ],
+		  "Type":"AWS::IAM::Policy",
+		  "Properties":{
+			"PolicyName":"LambdaRolePolicy1",
+			"Roles":[
+			  {
+				"Ref":"DevSecOpsLambdaRole"
+			  }
+			],
+			"PolicyDocument":{
+			  "Version":"2012-10-17",
+			  "Statement":[
+				{
+				  "Effect":"Allow",
+				  "Action":[
+					"logs:*"
+				  ],
+				  "Resource":[
+					"arn:aws:logs:*:*:*"
+				  ]
+				},
+				{
+				  "Effect":"Allow",
+				  "Action":[
+					"s3:*",
+					"ec2:*",
+					"ssm:*",
+					"cloudformation:*",
+					"codedeploy:*"
+				  ],
+				  "Resource":[
+					"*"
+				  ]
+				},
+				{
+				  "Effect":"Allow",
+				  "Action":[
+					"sns:*"
+				  ],
+				  "Resource":[
+					"*"
+				  ]
+				}				
+			  ]
+			}
+		  }
+		},	
+		"AutomationUpdateSsmParam":{
+		  "Type":"AWS::Lambda::Function",
+		  "DependsOn":[
+			"DevSecOpsLambdaRole",
+			"LambdaExecutionPolicy"
+		  ],
+		  "Properties":{
+			"Code":{
+			  "S3Bucket":{
+				"Ref":"LambdaS3Bucket"
+			  },
+			  "S3Key":{"Ref":"LambdaS3Key"}
+			},
+			"Role":{"Fn::GetAtt":["DevSecOpsLambdaRole","Arn"]},
+			"FunctionName":"AutomationUpdateSsmParam",
+			"Description":"Always return success",
+			"Timeout":200,
+			"Handler":"AutomationUpdateSsmParam.lambda_handler",
+			"Runtime":"python2.7"
+		  }
+		},
+		"AutomationGetSourceAMI":{
+		  "Type":"AWS::Lambda::Function",
+		  "DependsOn":[
+			"DevSecOpsLambdaRole",
+			"LambdaExecutionPolicy"
+		  ],
+		  "Properties":{
+			"Code":{
+			  "S3Bucket":{
+				"Ref":"LambdaS3Bucket"
+			  },
+			  "S3Key":{"Ref":"LambdaS3Key"}
+			},
+			"Role":{"Fn::GetAtt":["DevSecOpsLambdaRole","Arn"]},
+			"FunctionName":"AutomationGetSourceAMI",
+			"Description":"Always return success",
+			"Timeout":200,
+			"Handler":"AutomationGetSourceAMI.lambda_handler",
+			"Runtime":"python2.7"
+		  }
+		},
+		"UpdateDeploymentGroup":{
+		  "Type":"AWS::Lambda::Function",
+		  "DependsOn":[
+			"DevSecOpsLambdaRole",
+			"LambdaExecutionPolicy",
+			"MyDeploymentGroup",
+			"MyApplication"
+		  ],
+		  "Properties":{
+			"Code":{
+			  "S3Bucket":{
+				"Ref":"LambdaS3Bucket"
+			  },
+			  "S3Key":{"Ref":"LambdaS3Key"}
+			},
+			"Role":{"Fn::GetAtt":["DevSecOpsLambdaRole","Arn"]},
+			"FunctionName":"UpdateDeploymentGroup",
+			"Description":"Always return success",
+			"Timeout":200,
+			"Handler":"UpdateDeploymentGroup.lambda_handler",
+			"Runtime":"python2.7"
+		  }
+		},
+		"UpdateDeploymentGroupRun": {
+		  "Type": "Custom::UpdateDeploymentGroupRun",
+		  "DependsOn":[
+			"DevSecOpsLambdaRole",
+			"LambdaExecutionPolicy",
+			"MyDeploymentGroup",
+			"MyApplication",
+			"ElasticLoadBalancer"
+		  ],		  
+		  "Properties": {
+			"ServiceToken": { "Fn::GetAtt" : ["UpdateDeploymentGroup", "Arn"] },
+			"currentDeploymentGroupName": { "Ref": "MyDeploymentGroup" },
+			"applicationName": { "Ref": "MyApplication" },
+			"elbName": { "Ref": "ElasticLoadBalancer" },
+			"asgName": { "Ref": "WebServerGroup" }
+		  }
+		},		
+		"CodeCommitJavaRepo":{
+		  "Type":"AWS::CodeCommit::Repository",
+		  "Properties":{
+			"RepositoryName":{
+			  "Ref":"AWS::StackName"
+			},
+			"RepositoryDescription":"CodeCommit Repository",
+			"Triggers":[
+			  {
+				"Name":"MasterTrigger",
+				"CustomData":{
+				  "Ref":"AWS::StackName"
+				},
+				"DestinationArn":{
+				  "Ref":"NotificationTopic"
+				},
+				"Events":[
+				  "all"
+				]
+			  }
+			]
+		  }
+		},
+		"CodeBuildRole":{
+		  "Type":"AWS::IAM::Role",
+		  "Properties":{
+			"AssumeRolePolicyDocument":{
+			  "Statement":[
+				{
+				  "Effect":"Allow",
+				  "Principal":{
+					"Service":[
+					  "codebuild.amazonaws.com"
+					]
+				  },
+				  "Action":[
+					"sts:AssumeRole"
+				  ]
+				}
+			  ]
+			},
+			"Path":"/",
+			"Policies":[
+			  {
+				"PolicyName":"codebuild-service",
+				"PolicyDocument":{
+				  "Statement":[
+					{
+					  "Effect":"Allow",
+					  "Action":"*",
+					  "Resource":"*"
+					}
+				  ],
+				  "Version":"2012-10-17"
+				}
+			  }
+			]
+		  }
+		},		
+		"CodeBuildJavaProject":{
+		  "Type":"AWS::CodeBuild::Project",
+		  "DependsOn":"CodeBuildRole",
+		  "Properties":{
+			"Name":{
+			  "Ref":"AWS::StackName"
+			},
+			"Description":"Build Java application",
+			"ServiceRole":{
+			  "Fn::GetAtt":[
+				"CodeBuildRole",
+				"Arn"
+			  ]
+			},
+			"Artifacts":{
+			  "Type":"no_artifacts"
+			},
+			"Environment":{
+			  "Type":"LINUX_CONTAINER",
+			  "ComputeType":"BUILD_GENERAL1_SMALL",
+			  "Image":"aws/codebuild/java:openjdk-8"
+			},
+			"Source":{
+			  "Location":{
+				"Fn::Join":[
+				  "",
+				  [
+					"https://git-codecommit.",
+					{
+					  "Ref":"AWS::Region"
+					},
+					".amazonaws.com/v1/repos/",
+					{
+					  "Ref":"AWS::StackName"
+					}
+				  ]
+				]
+			  },
+			  "Type":"CODECOMMIT"
+			},
+			"TimeoutInMinutes":10,
+			"Tags":[
+			  {
+				"Key":"Owner",
+				"Value":"JavaTomcatProject"
+			  }
+			]
+		  }
+		},
+		"CodeDeployTrustRole":{
+		  "Type":"AWS::IAM::Role",
+		  "Properties":{
+                "AssumeRolePolicyDocument": {
+                    "Statement": [
+                        {
+                            "Action": [
+                                "sts:AssumeRole"
+                            ],
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "codedeploy.amazonaws.com"
+                                ]
+                            }
+                        }
+                    ],
+                    "Version": "2012-10-17"
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSCodeDeployRole"
+                ]
+		  }
+		},
+		"CodeDeployRolePolicies":{
+		  "Type":"AWS::IAM::Policy",
+		  "Properties":{
+			"PolicyName":"CodeDeployPolicy",
+			"PolicyDocument":{
+			  "Statement":[
+				{
+				  "Effect":"Allow",
+				  "Resource":[
+					"*"
+				  ],
+				  "Action":[
+					"ec2:Describe*"
+				  ]
+				},
+				{
+				  "Effect":"Allow",
+				  "Resource":[
+					"*"
+				  ],
+				  "Action":[
+					"autoscaling:*"
+				  ]
+				}
+			  ]
+			},
+			"Roles":[
+			  {
+				"Ref":"CodeDeployTrustRole"
+			  }
+			]
+		  }
+		},
+		"MyApplication":{
+		  "Type":"AWS::CodeDeploy::Application"
+		},		
+		"MyDeploymentGroup":{
+		  "Type":"AWS::CodeDeploy::DeploymentGroup",
+		  "DependsOn":["MyApplication","CodeDeployTrustRole","CodeDeployRolePolicies"],
+		  "Properties":{
+			"ApplicationName":{
+			  "Ref":"MyApplication"
+			},
+			"AutoScalingGroups" : [ {"Ref" : "WebServerGroup" } ],
+			"ServiceRoleArn":{
+			        "Fn::GetAtt":["CodeDeployTrustRole","Arn"]
+			}
+		  }
+		}		
+    },	
+  "Outputs" : {
+    "URL" : {
+      "Description" : "The URL of the website",
+      "Value" :  { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [ "ElasticLoadBalancer", "DNSName" ]}]]}
+    },
+    "CodeCommitRepo" : {
+      "Description" : "CodeCommitRepo Name",
+      "Value" :  {"Ref":"AWS::StackName"}
+    },
+    "CodeBuildProject" : {
+      "Description" : "CodeBuildProject Name",
+      "Value" :  {"Ref":"CodeBuildJavaProject"}
+    },
+    "ASGName" : {
+      "Description" : "Auto Scaling group Name",
+      "Value" :  { "Ref": "WebServerGroup" }
+    },
+    "ElasticLoadBalancer" : {
+      "Description" : "ElasticLoadBalancer Name",
+      "Value" :  { "Ref": "ElasticLoadBalancer" }
+    },
+    "CodeDeployApplication" : {
+      "Description" : "CodeDeploy Application Name",
+      "Value" :  { "Ref": "MyApplication" }
+    },
+	"CodeDeploymentGroup" : {
+      "Description" : "MyDeploymentGroup Name",
+      "Value" :  { "Ref": "MyDeploymentGroup" }
+    },
+    "SSMAutomationDocument" : {
+      "Description" : "SSMAutomationDocument Name",
+      "Value" :  { "Ref": "SSMAutomationDocument" }
+    },	
+    "CloneUrlSsh":{
+      "Value":{
+        "Fn::Join":[
+          "",
+          [
+            "git clone ",
+            {
+              "Fn::GetAtt":[
+                "CodeCommitJavaRepo",
+                "CloneUrlSsh"
+              ]
+            },
+            ""
+          ]
+        ]
+      },
+      "Description":"Git command for CodeCommit repository"
+    }	
+  }
+}
