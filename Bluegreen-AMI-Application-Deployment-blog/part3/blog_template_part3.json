@@ -9,7 +9,7 @@
 		"LambdaS3Bucket": {
 		  "Description": "The name of the S3 bucket that contains the source artifact, which must be in the same region as this stack",
 		  "Type": "String",
-		  "Default": "devsecopstest"
+		  "Default": "devsecopsblog"
 		},
 		"LambdaS3Key": {
 		  "Default": "devsecops-part3.zip",
@@ -18,7 +18,6 @@
 		},
 		"SSMAutomationDocument": {
 		  "Description": "SSMAutomationDocument name",
-		  "Default": "devsecopspart1-SSMAutomationDocument-C1MP3C6W0T7A",
 		  "Type": "String"
 		},			
 		"CodeCommitRepo": {
@@ -39,18 +38,15 @@
 		  "Type": "String"
 		},		
 		"ELBName": {
-		  "Default": "devsecopspart1-WebServerGroup-XGQ5RHB9EEUA",
 		  "Description": "Auto scaling group name",
 		  "Type": "String"
 		},		
 		"MyDeploymentGroup": {
 		  "Description": "MyDeploymentGroup name",
-		  "Default": "devsecopspart1-MyDeploymentGroup-ETPZCV1APKNS",
 		  "Type": "String"
 		},
 		"MyApplication": {
 		  "Description": "MyApplication name",
-		  "Default": "devsecopspart1-MyApplication-1H3DSD016HEBV",
 		  "Type": "String"
 		}	
     },	
