@@ -53,7 +53,7 @@
     "Resources": {
 		"PipelineS3Bucket" : {
 			"Type" : "AWS::S3::Bucket",
-			"Properties" : {"BucketName": {"Fn::Join":["",["codepipeline-",{"Ref":"AWS::Region"},"-",{"Ref":"AWS::AccountId"}]]}}
+			"Properties" : {"BucketName": {"Fn::Join":["",[{AWS::StackName},"-",{"Ref":"AWS::Region"},"-",{"Ref":"AWS::AccountId"}]]}}
 		},
 		"CodePipelineRole":{
 		  "Type":"AWS::IAM::Role",
