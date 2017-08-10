@@ -14,6 +14,10 @@ Here are the steps to set up this sample
 		a.	A function to get the Amazon provided SourceAMI ID based on region and architecture 
 		b.	A function to update the Systems Manager parameter with the golden AMI ID 
 		c.	A function to update the CodeBuild deployment group with necessary blue-green configurations (currently cloudformation does not have support for creating a deployment group with blue-green deployment configurations)
+		
+<b> <u> Part2: </u></b> Sample Java web application source code with the CodeBuild and CodeDeploy configuration files
+
+	1.	Copy all the files from Part2 folder into the your CodeCommit root folder and push them into AWS CodeCommit repository
 
 <b> <u> Part3: </u></b> CloudFormation template will create the AWS CodePipeline and all the requirements components with the following steps:
 
