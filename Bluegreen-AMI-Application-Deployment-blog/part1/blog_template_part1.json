@@ -32,7 +32,7 @@
 	"LambdaS3Bucket": {
 	  "Description": "The name of the S3 bucket that contains the source artifact, which must be in the same region as this stack",
 	  "Type": "String",
-	  "Default": "devsecopstest"
+	  "Default": "devsecopsblog"
 	},
 	"LambdaS3Key": {
 	  "Default": "devsecops-part1.zip",
