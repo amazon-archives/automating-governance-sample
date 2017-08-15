@@ -720,7 +720,7 @@
 						 "onFailure":"Abort",
 						 "inputs":{
 							"FunctionName":"AutomationGetSourceAMI",
-							"Payload":"{\"Region\":\"us-east-1\", \"Architecture\":\"HVM64\"}"
+							"Payload":"{\"Region\":\"{{\"Ref\" : \"AWS::Region\"}}\", \"Architecture\":\"HVM64\"}"
 						 }
 					  },
 						{
