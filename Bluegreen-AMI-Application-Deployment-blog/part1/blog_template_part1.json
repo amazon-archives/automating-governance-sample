@@ -321,11 +321,11 @@
 				{ "Fn::Join" : [ "", [ "", "" ] ] },
                 { "Fn::Join" : [ "", [ "yum install -y aws-cfn-bootstrap", "" ] ] },
                 { "Fn::Join" : [ "", [ "# Install the files and packages from the metadata", "" ] ] },
-                { "Fn::Join" : [ "", [ "/opt/aws/bin/cfn-init -v  --stack ", { "Ref" : "AWS::StackId" }, "  --resource WebServerGroup  --region us-east-1", "" ] ] },
+                { "Fn::Join" : [ "", [ "/opt/aws/bin/cfn-init -v  --stack ", { "Ref" : "AWS::StackId" }, "  --resource WebServerGroup  --region \"$REGION\"", "" ] ] },
                 { "Fn::Join" : [ "", [ "# Start up the cfn-hup daemon to listen for changes to the Web Server metadata", "" ] ] },
                 { "Fn::Join" : [ "", [ "/opt/aws/bin/cfn-hup || error_exit 'Failed to start cfn-hup'", "" ] ] },
                 { "Fn::Join" : [ "", [ "# Signal the status from cfn-init", "" ] ] },
-                { "Fn::Join" : [ "", [ "/opt/aws/bin/cfn-signal -e $?  --stack ", { "Ref" : "AWS::StackId" } ,"  --resource WebServerGroup   --region us-east-1", "" ] ] }
+                { "Fn::Join" : [ "", [ "/opt/aws/bin/cfn-signal -e $?  --stack ", { "Ref" : "AWS::StackId" } ,"  --resource WebServerGroup   --region \"$REGION\"", "" ] ] }
     ] ] } }
       }
     },

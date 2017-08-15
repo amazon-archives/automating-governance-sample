@@ -452,7 +452,8 @@
 				"Fn::Join":[
 				  "",
 				  [
-					"codepipeline-",
+					{"Ref":"AWS::StackName"},
+					"-",
 					{
 					  "Ref":"AWS::Region"
 					},
