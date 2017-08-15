@@ -685,6 +685,11 @@
 						  "description":"(Optional) The name of the new AMI that will be created. Default is a system-generated string including the source AMI id, and the creation time and date.",
 						  "default":"UpdateLinuxAmi_from_{{ssm:SourceAMIID}}_on_{{global:DATE_TIME}}"
 						},
+						"sourceRegion":{
+						  "type":"String",
+						  "description":"sourceRegion",
+						  "default":"{{global:REGION}}"
+						},						
 						"InstanceType":{
 						  "type":"String",
 						  "description":"(Optional) Type of instance to launch as the workspace host. Instance types vary by region. Default is t2.micro.",
@@ -720,7 +725,7 @@
 						 "onFailure":"Abort",
 						 "inputs":{
 							"FunctionName":"AutomationGetSourceAMI",
-							"Payload":"{\"Region\":\"{{\"Ref\" : \"AWS::Region\"}}\", \"Architecture\":\"HVM64\"}"
+							"Payload":"{\"Region\":\"{{sourceRegion}}\", \"Architecture\":\"HVM64\"}"
 						 }
 					  },
 						{
