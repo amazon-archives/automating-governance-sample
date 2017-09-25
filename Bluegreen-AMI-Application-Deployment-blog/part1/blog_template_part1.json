@@ -248,6 +248,12 @@
     },
     "LaunchConfig" : {
       "Type" : "AWS::AutoScaling::LaunchConfiguration",
+      "Metadata" : {
+        "AWS::CloudFormation::Init" : {
+          "config" : {
+          }
+        }
+      },	  
 	  "DependsOn":["InstanceRoleInstanceProfile"],
       "Properties" : {
 		"IamInstanceProfile" : { "Ref" : "InstanceRoleInstanceProfile" },
@@ -321,9 +327,7 @@
 				{ "Fn::Join" : [ "", [ "", "" ] ] },
                 { "Fn::Join" : [ "", [ "yum install -y aws-cfn-bootstrap", "" ] ] },
                 { "Fn::Join" : [ "", [ "# Install the files and packages from the metadata", "" ] ] },
-                { "Fn::Join" : [ "", [ "/opt/aws/bin/cfn-init -v  --stack ", { "Ref" : "AWS::StackId" }, "  --resource WebServerGroup  --region \"$REGION\"", "" ] ] },
-                { "Fn::Join" : [ "", [ "# Start up the cfn-hup daemon to listen for changes to the Web Server metadata", "" ] ] },
-                { "Fn::Join" : [ "", [ "/opt/aws/bin/cfn-hup || error_exit 'Failed to start cfn-hup'", "" ] ] },
+                { "Fn::Join" : [ "", [ "/opt/aws/bin/cfn-init -v  --stack ", { "Ref" : "AWS::StackId" }, "  --resource LaunchConfig  --region \"$REGION\"", "" ] ] },
                 { "Fn::Join" : [ "", [ "# Signal the status from cfn-init", "" ] ] },
                 { "Fn::Join" : [ "", [ "/opt/aws/bin/cfn-signal -e $?  --stack ", { "Ref" : "AWS::StackId" } ,"  --resource WebServerGroup   --region \"$REGION\"", "" ] ] }
     ] ] } }
